@@ -10,6 +10,7 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use chrono::Local;
+mod util;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 
@@ -246,9 +247,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
     let mut current_date = Local::now().date_naive();
     loop {
         // Determine file path based on current date
-        let date_str = current_date.format("%Y-%m-%d").to_string();
-        let ext = if fmt == "csv" { "csv" } else { "jsonl" };
-        let file_path = data_dir.join(format!("{date_str}.{ext}"));
+        let file_path = util::record_file_path(&data_dir, &current_date, &fmt);
 
         // Run the command
         let timestamp = Local::now().to_rfc3339();
@@ -312,4 +311,39 @@ fn run(opts: RunOpts) -> io::Result<()> {
         }
     }
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use tempfile::tempdir;
+    #[test]
+    fn duration_parse_valid() {
+        assert_eq!(parse_duration_str("1s").unwrap(), Duration::from_secs(1));
+        assert_eq!(parse_duration_str("2m").unwrap(), Duration::from_secs(120));
+        assert!(parse_duration_str("500ms").unwrap() <= Duration::from_millis(500));
+    }
+
+    #[test]
+    fn duration_parse_invalid() {
+        assert!(parse_duration_str("").is_err());
+        assert!(parse_duration_str("notaduration").is_err());
+    }
+
+    #[test]
+    fn write_csv_and_jsonl() {
+        let dir = tempdir().unwrap();
+        let csv_path = dir.path().join("out.csv");
+        let jsonl_path = dir.path().join("out.jsonl");
+        write_csv_record(&csv_path, "2025-01-01T00:00:00Z", "hello", 0).unwrap();
+        let csv_contents = std::fs::read_to_string(&csv_path).unwrap();
+        assert!(csv_contents.contains("2025-01-01T00:00:00Z,hello,0"));
+
+        write_jsonl_record(&jsonl_path, "2025-01-01T00:00:00Z", "hello", 0).unwrap();
+        let jsonl_contents = std::fs::read_to_string(&jsonl_path).unwrap();
+        assert!(jsonl_contents.trim().starts_with("{"));
+        assert!(jsonl_contents.contains("\"timestamp\":"));
+        assert!(jsonl_contents.contains("\"value\":"));
+        assert!(jsonl_contents.contains("\"exit_code\":"));
+    }
 }
