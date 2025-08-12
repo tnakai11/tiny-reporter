@@ -51,3 +51,24 @@ Development
 - Format and build: `cargo fmt && cargo build`
 - Run tests (if added later): `cargo test`
 
+Records
+-------
+- CSV rows: `timestamp,value,exit_code` (no header row is written).
+- JSONL lines: objects with fields `timestamp` (RFC3339), `value` (string), `exit_code` (number).
+- Rotation: one file per day; file name is the UTC/local date formatted as `YYYY-MM-DD` plus the chosen extension.
+
+Contributing
+------------
+- Local checks: `cargo fmt --all -- --check`, `cargo clippy --all-targets -- -D warnings`, `cargo build --all-targets`, `cargo test`.
+- CI: GitHub Actions runs fmt, clippy (deny warnings), build, and tests on pushes and PRs.
+- Optional pre-push hook: to automatically run checks before pushing, add this as `.git/hooks/pre-push` and make it executable:
+
+```
+#!/usr/bin/env bash
+set -euo pipefail
+echo "pre-push: verifying Rust project (fmt, clippy, build, test)"
+cargo fmt --all -- --check
+cargo clippy --all-targets -- -D warnings
+cargo build --all-targets
+cargo test
+```
