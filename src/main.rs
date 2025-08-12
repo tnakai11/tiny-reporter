@@ -2,12 +2,15 @@ use std::fs::{self, File, OpenOptions};
 use std::io::{self, Write};
 use std::path::{Path, PathBuf};
 use std::process::{Command, Stdio};
-use std::sync::{atomic::{AtomicBool, Ordering}, Arc};
+use std::sync::{
+    atomic::{AtomicBool, Ordering},
+    Arc,
+};
 use std::thread;
 use std::time::{Duration, Instant};
 
+use chrono::{Datelike, Local};
 use clap::{Parser, Subcommand};
-use chrono::{Local, Datelike};
 use serde::Serialize;
 
 /// A tiny reporter that periodically runs shell commands and records their output.
@@ -60,11 +63,18 @@ fn parse_duration_str(s: &str) -> Result<Duration, humantime::DurationError> {
 }
 
 fn acquire_lock(lock_path: &Path) -> io::Result<File> {
-    let file = OpenOptions::new().read(true).write(true).create(true).open(lock_path)?;
+    let file = OpenOptions::new()
+        .read(true)
+        .write(true)
+        .create(true)
+        .open(lock_path)?;
     // Try to acquire exclusive lock
     match fs2::FileExt::try_lock_exclusive(&file) {
         Ok(()) => Ok(file),
-        Err(e) => Err(io::Error::new(io::ErrorKind::Other, format!("failed to acquire lock: {}", e))),
+        Err(e) => Err(io::Error::new(
+            io::ErrorKind::Other,
+            format!("failed to acquire lock: {}", e),
+        )),
     }
 }
 
@@ -73,9 +83,17 @@ fn acquire_lock(lock_path: &Path) -> io::Result<File> {
 fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(String, i32)> {
     // Use bash on Unix to interpret the command; fall back to sh if bash isn't available.
     // On Windows, users should write fully qualified commands; we still try bash if available.
-    let shell = if cfg!(target_os = "windows") { "cmd" } else { "bash" };
+    let shell = if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        "bash"
+    };
     // For Windows, "/C" executes command and terminates; on Unix, "-lc" runs a login shell command
-    let args: &[&str] = if cfg!(target_os = "windows") { &["/C"] } else { &["-lc"] };
+    let args: &[&str] = if cfg!(target_os = "windows") {
+        &["/C"]
+    } else {
+        &["-lc"]
+    };
     let mut child = Command::new(shell)
         .args(args)
         .arg(command)
@@ -92,7 +110,10 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
         let output = match child.wait_with_output() {
             Ok(out) => out,
             Err(e) => {
-                let _ = tx.send(Err(io::Error::new(io::ErrorKind::Other, format!("wait error: {}", e))));
+                let _ = tx.send(Err(io::Error::new(
+                    io::ErrorKind::Other,
+                    format!("wait error: {}", e),
+                )));
                 return;
             }
         };
@@ -119,12 +140,18 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
                     format!("command timed out after {:?}", to),
                 ))
             }
-            Err(_) => Err(io::Error::new(io::ErrorKind::Other, "command execution error")),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "command execution error",
+            )),
         }
     } else {
         match rx.recv() {
             Ok(res) => res,
-            Err(_) => Err(io::Error::new(io::ErrorKind::Other, "command execution error")),
+            Err(_) => Err(io::Error::new(
+                io::ErrorKind::Other,
+                "command execution error",
+            )),
         }
     }
 }
@@ -132,7 +159,9 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
 fn write_csv_record(path: &Path, timestamp: &str, value: &str, exit_code: i32) -> io::Result<()> {
     let file_exists = path.exists();
     let file = OpenOptions::new().create(true).append(true).open(path)?;
-    let mut wtr = csv::WriterBuilder::new().has_headers(!file_exists).from_writer(file);
+    let mut wtr = csv::WriterBuilder::new()
+        .has_headers(!file_exists)
+        .from_writer(file);
     wtr.write_record(&[timestamp, value, &exit_code.to_string()])?;
     wtr.flush()?;
     Ok(())
@@ -185,16 +214,29 @@ fn run(opts: RunOpts) -> io::Result<()> {
     let command_str = cmd.join(" ");
     // Parse durations
     let interval = match &every {
-        Some(s) => Some(parse_duration_str(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid interval '{}': {}", s, e)))?),
+        Some(s) => Some(parse_duration_str(s).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid interval '{}': {}", s, e),
+            )
+        })?),
         None => None,
     };
     let timeout_dur = match &timeout {
-        Some(s) => Some(parse_duration_str(s).map_err(|e| io::Error::new(io::ErrorKind::InvalidInput, format!("invalid timeout '{}': {}", s, e)))?),
+        Some(s) => Some(parse_duration_str(s).map_err(|e| {
+            io::Error::new(
+                io::ErrorKind::InvalidInput,
+                format!("invalid timeout '{}': {}", s, e),
+            )
+        })?),
         None => None,
     };
     let fmt = format.to_lowercase();
     if fmt != "csv" && fmt != "jsonl" {
-        return Err(io::Error::new(io::ErrorKind::InvalidInput, "format must be 'csv' or 'jsonl'"));
+        return Err(io::Error::new(
+            io::ErrorKind::InvalidInput,
+            "format must be 'csv' or 'jsonl'",
+        ));
     }
 
     // Acquire global lock to prevent concurrent runs of same name
@@ -208,7 +250,8 @@ fn run(opts: RunOpts) -> io::Result<()> {
         let running = running.clone();
         ctrlc::set_handler(move || {
             running.store(false, Ordering::SeqCst);
-        }).expect("Error setting Ctrl-C handler");
+        })
+        .expect("Error setting Ctrl-C handler");
     }
 
     // Determine initial date for rotation
