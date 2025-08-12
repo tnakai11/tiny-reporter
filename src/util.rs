@@ -1,5 +1,10 @@
 use chrono::NaiveDate;
 use std::path::{Path, PathBuf};
+use std::time::Duration;
+
+pub fn parse_duration_str(s: &str) -> Result<Duration, humantime::DurationError> {
+    humantime::parse_duration(s)
+}
 
 pub fn record_file_path(data_dir: &Path, date: &NaiveDate, fmt: &str) -> PathBuf {
     let ext = if fmt == "csv" { "csv" } else { "jsonl" };
