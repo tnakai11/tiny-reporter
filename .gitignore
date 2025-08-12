@@ -11,3 +11,6 @@ target/
 # Environment/config
 .env
 .cargo/
+
+# Local HOME used in sandboxed runs
+.home/

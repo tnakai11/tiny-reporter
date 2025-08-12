@@ -90,11 +90,11 @@ fn run(opts: RunOpts) -> io::Result<()> {
         let timestamp = Local::now().to_rfc3339();
         match exec::run_shell_command(&command_str, timeout_dur) {
             Ok((output, exit_code)) => {
-                write_record(&fmt, &file_path, &timestamp, &output, exit_code)?
+                write_record(&fmt, &file_path, &timestamp, &output, exit_code)?;
             }
             Err(e) => {
                 let msg = format!("error: {e}");
-                write_record(&fmt, &file_path, &timestamp, &msg, -1)?
+                write_record(&fmt, &file_path, &timestamp, &msg, -1)?;
             }
         }
 
