@@ -1,0 +1,13 @@
+# Build artifacts
+target/
+
+# Editors and OS
+.DS_Store
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment/config
+.env
+.cargo/
