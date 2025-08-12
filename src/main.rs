@@ -1,4 +1,5 @@
 use std::io;
+use std::path::Path;
 use std::sync::{
     atomic::{AtomicBool, Ordering},
     Arc,
@@ -85,68 +86,64 @@ fn run(opts: RunOpts) -> io::Result<()> {
         // Determine file path based on current date
         let file_path = util::record_file_path(&data_dir, &current_date, &fmt);
 
-        // Run the command
+        // Run the command and write a record
         let timestamp = Local::now().to_rfc3339();
         match exec::run_shell_command(&command_str, timeout_dur) {
             Ok((output, exit_code)) => {
-                if fmt == "csv" {
-                    storage::write_csv_record(&file_path, &timestamp, &output, exit_code)?;
-                } else {
-                    storage::write_jsonl_record(&file_path, &timestamp, &output, exit_code)?;
-                }
+                write_record(&fmt, &file_path, &timestamp, &output, exit_code)?
             }
             Err(e) => {
-                // Write error message as output with exit_code -1
                 let msg = format!("error: {e}");
-                if fmt == "csv" {
-                    storage::write_csv_record(&file_path, &timestamp, &msg, -1)?;
-                } else {
-                    storage::write_jsonl_record(&file_path, &timestamp, &msg, -1)?;
-                }
+                write_record(&fmt, &file_path, &timestamp, &msg, -1)?
             }
         }
 
-        // If no interval specified, run once and exit
-        if interval.is_none() {
-            break;
-        }
-
-        // Check for shutdown
-        if !running.load(Ordering::SeqCst) {
-            break;
-        }
-
-        // Sleep for the specified interval
-        if let Some(dur) = interval {
-            let start = Instant::now();
-            while running.load(Ordering::SeqCst) {
-                let elapsed = Instant::now().duration_since(start);
-                if elapsed >= dur {
+        match interval {
+            Some(dur) => {
+                if !running.load(Ordering::SeqCst) {
                     break;
                 }
-                let remaining = dur - elapsed;
-                // Sleep in smaller chunks to allow quicker Ctrl-C response
-                let sleep_dur = if remaining > Duration::from_millis(100) {
-                    Duration::from_millis(100)
-                } else {
-                    remaining
-                };
-                thread::sleep(sleep_dur);
+                sleep_with_interrupt(&running, dur);
+                // Update current date for rotation after sleeping
+                let now_date = storage::current_date();
+                if now_date != current_date {
+                    current_date = now_date;
+                }
+                if !running.load(Ordering::SeqCst) {
+                    break;
+                }
             }
-        }
-
-        // Update current date for rotation
-        let now_date = storage::current_date();
-        if now_date != current_date {
-            current_date = now_date;
-        }
-
-        // Break if shutdown after sleeping
-        if !running.load(Ordering::SeqCst) {
-            break;
+            None => break, // run once
         }
     }
     Ok(())
+}
+
+fn write_record(
+    fmt: &str,
+    path: &Path,
+    timestamp: &str,
+    value: &str,
+    exit_code: i32,
+) -> io::Result<()> {
+    if fmt == "csv" {
+        storage::write_csv_record(path, timestamp, value, exit_code)
+    } else {
+        storage::write_jsonl_record(path, timestamp, value, exit_code)
+    }
+}
+
+fn sleep_with_interrupt(running: &AtomicBool, dur: Duration) {
+    let start = Instant::now();
+    while running.load(Ordering::SeqCst) {
+        let elapsed = Instant::now().duration_since(start);
+        if elapsed >= dur {
+            break;
+        }
+        let remaining = dur - elapsed;
+        let chunk = remaining.min(Duration::from_millis(100));
+        thread::sleep(chunk);
+    }
 }
 
 #[cfg(test)]
