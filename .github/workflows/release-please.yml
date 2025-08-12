@@ -1,0 +1,26 @@
+name: Release Please
+
+on:
+  push:
+    branches: [ main ]
+  workflow_dispatch:
+    inputs:
+      release-as:
+        description: "Explicit version to release (e.g., 0.2.0). Optional."
+        required: false
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      pull-requests: write
+    steps:
+      - name: Release Please
+        uses: google-github-actions/release-please-action@v4
+        with:
+          release-type: rust
+          package-name: trep
+          # Optional manual override via workflow_dispatch
+          release-as: ${{ github.event.inputs.release-as }}
+

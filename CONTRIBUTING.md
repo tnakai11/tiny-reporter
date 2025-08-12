@@ -34,3 +34,13 @@ CI
 --
 GitHub Actions (`.github/workflows/ci.yml`) runs the same checks on pushes to `main` and on pull requests.
 
+Releases
+--------
+This repo uses Release Please to automate version bumps and GitHub releases.
+
+- Conventional commits drive the next version:
+  - `feat(scope): ...` → minor version
+  - `fix(scope): ...` → patch version
+  - `feat!` or `BREAKING CHANGE:` in body → major version
+- A "Release PR" is opened automatically on pushes to `main`; merging it creates the tag and GitHub release.
+- Manual trigger: run the "Release Please" workflow with the optional `release-as` input to force a version (e.g., `0.2.0`).
