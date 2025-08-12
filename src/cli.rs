@@ -36,4 +36,3 @@ pub struct RunOpts {
     #[arg(last = true, required = true)]
     pub cmd: Vec<String>,
 }
-

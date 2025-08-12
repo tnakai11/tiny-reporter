@@ -7,10 +7,10 @@ use std::thread;
 use std::time::{Duration, Instant};
 
 use chrono::Local;
-mod util;
 mod cli;
 mod exec;
 mod storage;
+mod util;
 use clap::Parser;
 
 use cli::{Cli, Commands, RunOpts};
@@ -155,8 +155,14 @@ mod tests {
     use tempfile::tempdir;
     #[test]
     fn duration_parse_valid() {
-        assert_eq!(util::parse_duration_str("1s").unwrap(), Duration::from_secs(1));
-        assert_eq!(util::parse_duration_str("2m").unwrap(), Duration::from_secs(120));
+        assert_eq!(
+            util::parse_duration_str("1s").unwrap(),
+            Duration::from_secs(1)
+        );
+        assert_eq!(
+            util::parse_duration_str("2m").unwrap(),
+            Duration::from_secs(120)
+        );
         assert!(util::parse_duration_str("500ms").unwrap() <= Duration::from_millis(500));
     }
 

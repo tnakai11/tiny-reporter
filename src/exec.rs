@@ -6,8 +6,16 @@ use std::time::Duration;
 /// Run the provided shell command and capture its stdout.
 /// Returns (output trimmed, exit code).
 pub fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(String, i32)> {
-    let shell = if cfg!(target_os = "windows") { "cmd" } else { "bash" };
-    let args: &[&str] = if cfg!(target_os = "windows") { &["/C"] } else { &["-lc"] };
+    let shell = if cfg!(target_os = "windows") {
+        "cmd"
+    } else {
+        "bash"
+    };
+    let args: &[&str] = if cfg!(target_os = "windows") {
+        &["/C"]
+    } else {
+        &["-lc"]
+    };
     let child = Command::new(shell)
         .args(args)
         .arg(command)
@@ -36,11 +44,16 @@ pub fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result
             Ok(res) => res,
             Err(std::sync::mpsc::RecvTimeoutError::Timeout) => {
                 if cfg!(target_os = "windows") {
-                    let _ = Command::new("taskkill").args(["/PID", &pid.to_string(), "/T", "/F"]).status();
+                    let _ = Command::new("taskkill")
+                        .args(["/PID", &pid.to_string(), "/T", "/F"])
+                        .status();
                 } else {
                     let _ = Command::new("kill").args(["-9", &pid.to_string()]).status();
                 }
-                Err(io::Error::new(io::ErrorKind::TimedOut, format!("command timed out after {to:?}")))
+                Err(io::Error::new(
+                    io::ErrorKind::TimedOut,
+                    format!("command timed out after {to:?}"),
+                ))
             }
             Err(_) => Err(io::Error::other("command execution error")),
         }
@@ -51,4 +64,3 @@ pub fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result
         }
     }
 }
-
