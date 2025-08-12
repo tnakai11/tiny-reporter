@@ -9,7 +9,7 @@ use std::sync::{
 use std::thread;
 use std::time::{Duration, Instant};
 
-use chrono::{Datelike, Local};
+use chrono::Local;
 use clap::{Parser, Subcommand};
 use serde::Serialize;
 
@@ -65,16 +65,13 @@ fn parse_duration_str(s: &str) -> Result<Duration, humantime::DurationError> {
 fn acquire_lock(lock_path: &Path) -> io::Result<File> {
     let file = OpenOptions::new()
         .read(true)
-        .write(true)
         .create(true)
+        .append(true)
         .open(lock_path)?;
     // Try to acquire exclusive lock
     match fs2::FileExt::try_lock_exclusive(&file) {
         Ok(()) => Ok(file),
-        Err(e) => Err(io::Error::new(
-            io::ErrorKind::Other,
-            format!("failed to acquire lock: {}", e),
-        )),
+        Err(e) => Err(io::Error::other(format!("failed to acquire lock: {e}"))),
     }
 }
 
@@ -94,7 +91,7 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
     } else {
         &["-lc"]
     };
-    let mut child = Command::new(shell)
+    let child = Command::new(shell)
         .args(args)
         .arg(command)
         .stdout(Stdio::piped())
@@ -110,10 +107,7 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
         let output = match child.wait_with_output() {
             Ok(out) => out,
             Err(e) => {
-                let _ = tx.send(Err(io::Error::new(
-                    io::ErrorKind::Other,
-                    format!("wait error: {}", e),
-                )));
+                let _ = tx.send(Err(io::Error::other(format!("wait error: {e}"))));
                 return;
             }
         };
@@ -137,21 +131,15 @@ fn run_shell_command(command: &str, timeout: Option<Duration>) -> io::Result<(St
                 }
                 Err(io::Error::new(
                     io::ErrorKind::TimedOut,
-                    format!("command timed out after {:?}", to),
+                    format!("command timed out after {to:?}"),
                 ))
             }
-            Err(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "command execution error",
-            )),
+            Err(_) => Err(io::Error::other("command execution error")),
         }
     } else {
         match rx.recv() {
             Ok(res) => res,
-            Err(_) => Err(io::Error::new(
-                io::ErrorKind::Other,
-                "command execution error",
-            )),
+            Err(_) => Err(io::Error::other("command execution error")),
         }
     }
 }
@@ -162,7 +150,7 @@ fn write_csv_record(path: &Path, timestamp: &str, value: &str, exit_code: i32) -
     let mut wtr = csv::WriterBuilder::new()
         .has_headers(!file_exists)
         .from_writer(file);
-    wtr.write_record(&[timestamp, value, &exit_code.to_string()])?;
+    wtr.write_record([timestamp, value, &exit_code.to_string()])?;
     wtr.flush()?;
     Ok(())
 }
@@ -175,7 +163,7 @@ fn write_jsonl_record(path: &Path, timestamp: &str, value: &str, exit_code: i32)
         exit_code,
     };
     let json = serde_json::to_string(&record)?;
-    writeln!(file, "{}", json)?;
+    writeln!(file, "{json}")?;
     Ok(())
 }
 
@@ -195,7 +183,7 @@ fn main() {
     match cli.command {
         Commands::Run(opts) => {
             if let Err(e) = run(opts) {
-                eprintln!("Error: {}", e);
+                eprintln!("Error: {e}");
                 std::process::exit(1);
             }
         }
@@ -217,7 +205,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
         Some(s) => Some(parse_duration_str(s).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("invalid interval '{}': {}", s, e),
+                format!("invalid interval '{s}': {e}"),
             )
         })?),
         None => None,
@@ -226,7 +214,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
         Some(s) => Some(parse_duration_str(s).map_err(|e| {
             io::Error::new(
                 io::ErrorKind::InvalidInput,
-                format!("invalid timeout '{}': {}", s, e),
+                format!("invalid timeout '{s}': {e}"),
             )
         })?),
         None => None,
@@ -241,7 +229,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
 
     // Acquire global lock to prevent concurrent runs of same name
     let data_dir = ensure_data_dir(&name)?;
-    let lock_path = data_dir.join(format!("{}.lock", name));
+    let lock_path = data_dir.join(format!("{name}.lock"));
     let _lock_file = acquire_lock(&lock_path)?;
 
     // Set up Ctrl-C handler for graceful shutdown
@@ -260,7 +248,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
         // Determine file path based on current date
         let date_str = current_date.format("%Y-%m-%d").to_string();
         let ext = if fmt == "csv" { "csv" } else { "jsonl" };
-        let file_path = data_dir.join(format!("{}.{}", date_str, ext));
+        let file_path = data_dir.join(format!("{date_str}.{ext}"));
 
         // Run the command
         let timestamp = Local::now().to_rfc3339();
@@ -274,7 +262,7 @@ fn run(opts: RunOpts) -> io::Result<()> {
             }
             Err(e) => {
                 // Write error message as output with exit_code -1
-                let msg = format!("error: {}", e);
+                let msg = format!("error: {e}");
                 if fmt == "csv" {
                     write_csv_record(&file_path, &timestamp, &msg, -1)?;
                 } else {
